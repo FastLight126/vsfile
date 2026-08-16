@@ -2,7 +2,7 @@
 /*
  * 微思文件管理器 0.0.1 - 免费，易用的单文件在线文件管理器
  * Margin.top https://margin.top
- * 最后更新时间 2026/8/16 21:59:40
+ * 最后更新时间 2026/8/17 02:15:53
  */
 
 // 独立配置文件路径，留空则使用内置配置文件模式
@@ -174,8 +174,24 @@ foreach ($tmpcfg['login_failures'] as $username => $failInfo) {
 // #region 初始化 Session
 $configChanges && SetConfig($config);
 $tmpcfgChanges && SetTmpcfg($tmpcfg);
-$sessionSecure = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') || (isset($_SERVER['SERVER_PORT']) && intval($_SERVER['SERVER_PORT']) === 443);
-session_set_cookie_params(0, '/; samesite=Lax', '', $sessionSecure, true);
+$sessionSecure = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
+    || (isset($_SERVER['SERVER_PORT']) && intval($_SERVER['SERVER_PORT']) === 443)
+    || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+    || (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on');
+
+if (version_compare(PHP_VERSION, '7.3.0', '>=')) {
+    session_set_cookie_params(array(
+        'lifetime' => 0,
+        'path'     => '/',
+        'domain'   => '',
+        'secure'   => $sessionSecure,
+        'httponly' => true,
+        'samesite' => 'Strict',
+    ));
+} else {
+    session_set_cookie_params(0, '/; samesite=Strict', '', $sessionSecure, true);
+}
+
 session_name($config['session_name']);
 session_start();
 // #endregion
@@ -742,6 +758,7 @@ if ($_GET['a'] === 'image') {
 
 // #region 登录 [login]
 if ($_GET['a'] === 'login') {
+	CheckInvalidReferer() or Error('invalid_request');
 	GetCurrentUser() && Error('logged_in');
 	
 	$data     = GetPost();
@@ -1401,7 +1418,6 @@ if ($_GET['a'] === 'zip') {
 	}
 	
 	isset($post['src']) or Error('invalid_request');
-	
 	$srcInputList = array();
 	
 	if (is_string($post['src'])) {
@@ -1517,10 +1533,17 @@ if ($_GET['a'] === 'zip') {
 // #endregion
 
 // #region 主界面 [main]
-list($referer)       = explode('?', $_SERVER['HTTP_REFERER']);
-$_SESSION['referer'] = $referer;
 header('Content-Type: text/html; charset=utf-8');
-exit(GetModule(GetCurrentUser() ? 'html/frame.html' : 'html/login.html'));
+
+if (GetCurrentUser()) {
+    list($referer)       = explode('?', $_SERVER['HTTP_REFERER']);
+    $_SESSION['referer'] = $referer;
+    exit(GetModule('html/frame.html'));
+} else {
+    list($referer)       = explode('?', GetCurrentUrl());
+    $_SESSION['referer'] = $referer;
+    exit(GetModule('html/login.html'));
+}
 // #endregion
 
 function JSONReturn($array)
@@ -3971,6 +3994,45 @@ function TGZAddPath($archive, $sourcePath, $entryPath)
     }
 
     return true;
+}
+
+function GetCurrentUrl()
+{
+    $https = false;
+
+    if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
+        $https = true;
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) &&
+        $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+        $https = true;
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) &&
+        strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on') {
+        $https = true;
+    }
+
+    $scheme = $https ? 'https' : 'http';
+    $host   = '';
+
+    if (!empty($_SERVER['HTTP_HOST'])) {
+        $host = $_SERVER['HTTP_HOST'];
+    } elseif (!empty($_SERVER['SERVER_NAME'])) {
+        $host = $_SERVER['SERVER_NAME'];
+    } else {
+        $host = 'localhost';
+    }
+
+    $port         = '';
+    $standardPort = $https ? '443' : '80';
+
+    if (strpos($host, ':') === false) {
+        $serverPort = (string) $_SERVER['SERVER_PORT'];
+        if ($serverPort !== '' && $serverPort !== $standardPort) {
+            $port = ':' . $serverPort;
+        }
+    }
+
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+    return $scheme . '://' . $host . $port . $requestUri;
 }
 ?>
 <!----- FILE css/audio.css START -----><style>
