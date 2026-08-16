@@ -1,8 +1,8 @@
 <?php
 /*
- * 微思文件管理器 0.0.1 - 免费，易用的单文件在线文件管理器
+ * 微思文件管理器 0.0.2 - 免费，易用的单文件在线文件管理器
  * Margin.top https://margin.top
- * 最后更新时间 2026/8/17 02:15:53
+ * 最后更新时间 2026/8/17 02:16:47
  */
 
 // 独立配置文件路径，留空则使用内置配置文件模式
@@ -17625,7 +17625,7 @@ window.global = {
         {"id":"tur","language":"Türkçe"},
     ],
     renderLang: true,
-    version: '0.0.1',
+    version: '0.0.2',
 };
 
 Array.prototype.remove = function (value) {
